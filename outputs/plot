@@ -1,0 +1,207 @@
+import pandas as pd
+import plotly.express as px
+
+csv_path = r"D:/OneDrive/Desktop/sentimentdataset.csv"
+df = pd.read_csv(csv_path)
+
+df_vis = df.copy()
+
+
+positive_labels = {
+    "positive", "happiness", "joy", "love", "amusement", "enjoyment",
+    "admiration", "affection", "awe", "excitement", "kind",
+    "acceptance", "adoration", "anticipation", "calmness"
+}
+
+negative_labels = {
+    "negative", "anger", "fear", "sadness", "disgust", "bitter",
+    "confusion", "disappointed"
+}
+
+neutral_labels = {"neutral"}
+
+def simplify_sentiment(x):
+    s = str(x).strip().lower()
+    if s in positive_labels:
+        return "Positive"
+    elif s in negative_labels:
+        return "Negative"
+    elif s in neutral_labels:
+        return "Neutral"
+    else:
+        return "Neutral"
+
+df_vis["SentimentSimple"] = df_vis["Sentiment"].apply(simplify_sentiment)
+
+
+if "Hour" in df_vis.columns:
+    df_vis["Hour"] = df_vis["Hour"].astype(int)
+
+df_vis["Engagement"] = df_vis["Likes"] + df_vis["Retweets"]
+
+def dark_layout(fig, title, xlab=None, ylab=None):
+    fig.update_layout(
+        template="plotly_dark",
+        title=title,
+        title_font=dict(size=24),
+        xaxis_title=xlab,
+        yaxis_title=ylab
+    )
+    return fig
+
+
+
+# 1️⃣ Platform × Sentiment
+plat_sent = (
+    df_vis.groupby(["Platform", "SentimentSimple"])
+    .size()
+    .reset_index(name="Count")
+)
+
+fig1 = px.bar(
+    plat_sent,
+    x="Platform",
+    y="Count",
+    color="SentimentSimple",
+    barmode="stack"
+)
+fig1 = dark_layout(fig1, "Post Count by Platform and (Simplified) Sentiment",
+                   "Platform", "Post Count")
+fig1.show()
+
+
+# 2️⃣ Posts by Hour
+posts_hour = (
+    df_vis.groupby("Hour")
+    .size()
+    .reset_index(name="Count")
+    .sort_values("Hour")
+)
+
+fig2 = px.bar(
+    posts_hour,
+    x="Hour",
+    y="Count"
+)
+fig2 = dark_layout(fig2, "Number of Posts by Hour",
+                   "Hour of Day", "Post Count")
+fig2.show()
+
+
+# 3️⃣ Platform × Hour Heatmap
+plat_hour = (
+    df_vis.groupby(["Platform", "Hour"])
+    .size()
+    .reset_index(name="Count")
+)
+
+heat_pivot = plat_hour.pivot_table(
+    index="Platform",
+    columns="Hour",
+    values="Count",
+    fill_value=0
+)
+
+fig3 = px.imshow(
+    heat_pivot,
+    aspect="auto",
+    color_continuous_scale="Viridis"
+)
+fig3 = dark_layout(fig3, "Post Volume Heatmap by Platform and Hour",
+                   "Hour of Day", "Platform")
+fig3.show()
+
+
+# 4️⃣ Overall SentimentSimple Distribution
+sent_dist = df_vis["SentimentSimple"].value_counts().reset_index()
+sent_dist.columns = ["SentimentSimple", "Count"]
+
+fig4 = px.bar(
+    sent_dist,
+    x="SentimentSimple",
+    y="Count"
+)
+fig4 = dark_layout(fig4, "Overall Simplified Sentiment Distribution",
+                   "Sentiment Category", "Post Count")
+fig4.show()
+
+
+# 5️⃣ SentimentSimple by Hour
+sent_hour = (
+    df_vis.groupby(["Hour", "SentimentSimple"])
+    .size()
+    .reset_index(name="Count")
+    .sort_values("Hour")
+)
+
+fig5 = px.bar(
+    sent_hour,
+    x="Hour",
+    y="Count",
+    color="SentimentSimple",
+    barmode="stack"
+)
+fig5 = dark_layout(fig5, "Simplified Sentiment Distribution by Hour",
+                   "Hour of Day", "Post Count")
+fig5.show()
+
+
+# 6️⃣ SentimentSimple Proportion per Platform
+plat_sent_total = (
+    df_vis.groupby(["Platform", "SentimentSimple"])
+    .size()
+    .reset_index(name="Count")
+)
+
+plat_tot = plat_sent_total.groupby("Platform")["Count"].transform("sum")
+plat_sent_total["Proportion"] = plat_sent_total["Count"] / plat_tot
+
+fig6 = px.bar(
+    plat_sent_total,
+    x="Platform",
+    y="Proportion",
+    color="SentimentSimple",
+    barmode="stack"
+)
+fig6 = dark_layout(fig6, "Simplified Sentiment Proportion within Each Platform",
+                   "Platform", "Proportion of Posts")
+fig6.update_yaxes(range=[0, 1])
+fig6.show()
+
+
+# 7️⃣ Average Likes & Retweets by Hour
+eng_hour = (
+    df_vis.groupby("Hour")[["Likes", "Retweets"]]
+    .mean()
+    .reset_index()
+    .sort_values("Hour")
+)
+
+eng_melt = eng_hour.melt(
+    id_vars="Hour",
+    value_vars=["Likes", "Retweets"],
+    var_name="Metric",
+    value_name="AverageValue"
+)
+
+fig7 = px.line(
+    eng_melt,
+    x="Hour",
+    y="AverageValue",
+    color="Metric"
+)
+fig7 = dark_layout(fig7, "Average Likes and Retweets by Hour",
+                   "Hour of Day", "Average Value")
+fig7.show()
+
+
+# 8️⃣ Engagement vs Simplified Sentiment
+fig8 = px.box(
+    df_vis,
+    x="SentimentSimple",
+    y="Engagement"
+)
+fig8 = dark_layout(fig8, "Engagement Distribution by Simplified Sentiment",
+                   "Simplified Sentiment", "Engagement (Likes + Retweets)")
+fig8.show()
+
